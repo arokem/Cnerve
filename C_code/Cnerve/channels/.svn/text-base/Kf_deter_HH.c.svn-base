@@ -1,0 +1,61 @@
+/*
+ *  Kf_deter.c
+ *  cnerve
+ *
+ *  Created by Nikita on 2/15/10.
+ *  Copyright 2010 University of Washington. All rights reserved.
+ *
+ */
+
+#include <math.h>					// for misc. log/exp operations
+
+#include <stdbool.h>				// for bool defenition
+#include <stdint.h>					// for uint32_t defenition
+#include <stdio.h>					// for FILE defenition
+
+#include "../cnerve.h"
+#include "../mt19937ar.h"				// for random number generator
+
+
+#ifdef DEBUG
+double Deterministic_K(const bool doInit, const uint32_t N_K __attribute__ ((unused)), const double V_m, const double si, const uint32_t it  __attribute__ ((unused)), const uint32_t node, FILE *fp  __attribute__ ((unused)) );
+#else
+double Deterministic_K(const bool doInit, const uint32_t N_K __attribute__ ((unused)), const double V_m, const double si, const uint32_t it  __attribute__ ((unused)), const uint32_t node);
+#endif
+		
+
+/*****************************************/
+/* Deterministic algorithm for nodal K   */
+/*****************************************/
+/** int it argument: this is a dummy argument, supplied only such that the
+ * prototype of the function is the same as in stochastic cases.
+ */
+#ifdef DEBUG
+double Deterministic_K(const bool doInit, const uint32_t N_K __attribute__ ((unused)), const double V_m, const double si, const uint32_t it  __attribute__ ((unused)), const uint32_t node, FILE *fp  __attribute__ ((unused)) ) {	
+#else
+double Deterministic_K(const bool doInit, const uint32_t N_K __attribute__ ((unused)), const double V_m, const double si, const uint32_t it  __attribute__ ((unused)), const uint32_t node) {
+#endif
+	
+	
+	static double n_det[MAX_ANODE];
+	
+	double	a_n = rate_K( ALPHA_N,	V_m); 
+	double	b_n = rate_K( BETA_N,	V_m);
+	
+	double	n_tau = 1/(a_n+b_n);
+	double	n_inf = a_n*n_tau;
+	
+	/* initialize(0) or generation(1) */
+	if( unlikely( doInit )) {
+		
+		/* Initialize the number of channels in each state */
+		n_det[node] = n_inf;
+		
+	} else {
+
+		n_det[node] += si/n_tau*(n_inf-n_det[node]);
+	}
+	
+	return (pow(n_det[node],4.0) );
+}
+

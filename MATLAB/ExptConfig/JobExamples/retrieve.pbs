@@ -1,0 +1,16 @@
+#!/bin/bash
+#
+#PBS -N NormSupra_retrieval
+#PBS -l nodes=1:ppn=8,mem=12gb,feature=8core
+#PBS -l walltime=03:00:00
+#PBS -o /gscratch/stf/jresnick/NewData/NormSupra/RetrieveOut
+#PBS -j oe
+#PBS -d /gscratch/stf/jresnick/CnerveRepo/Simulation/MATLAB/
+#
+module load matlab_2015b
+#
+cd $PBS_O_INITDIR
+matlab -nosplash -nodisplay <<retrieveSub
+retrieve('/gscratch/stf/jresnick/NewData/NormSupra.mat');
+exit;
+retrieveSub

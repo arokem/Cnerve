@@ -1,0 +1,19 @@
+2017.08.25
+1 fiber pop, 4 fibers/po, 3 montes, 5 stims
+Without Vltg:
+real	0m15.678s
+user	0m37.212s
+sys	0m0.020s
+
+With Vltg:
+real	0m15.513s
+user	0m36.836s
+sys	0m0.036s
+
+4 fiber pop, 4 fibers/po, 3 montes, 5 stims
+With Vltg:
+real	0m58.283s
+user	2m40.292s
+sys	0m0.076s
+
+

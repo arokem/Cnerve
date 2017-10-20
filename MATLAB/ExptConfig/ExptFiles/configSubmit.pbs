@@ -1,0 +1,24 @@
+#!/bin/bash
+
+## This script is for submitting a .m simulation config file.
+
+#PBS -N cnerveConfig
+#PBS -l nodes=1:ppn=8,mem=8gb,feature=8core
+#PBS -l walltime=03:00:00
+#PBS -o /gscratch/stf/jresnick/NewData
+#PBS -j oe
+
+#PBS -d /gscratch/stf/jresnick/Rub_Code/Simulation/MATLAB/
+
+cd $PBS_O_INITDIR
+cp configSubmit.pbs /gscratch/stf/jresnick/NewData/${PBS_JOBID}configSubmit.pbs
+
+module load matlab_2015b
+cd PDM_Param_JR
+
+## Note: can add additional matlab commands within configSubmit.
+matlab -nosplash -nodisplay << configdoc
+load('/gscratch/stf/jresnick/SFExptConfigparam.mat','thresh','RS');
+SFExptConfig('Full','Hyak',thresh,RS);
+exit;
+configdoc

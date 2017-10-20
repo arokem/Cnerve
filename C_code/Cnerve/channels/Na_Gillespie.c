@@ -1,0 +1,225 @@
+/*
+ *  Naf_stoch_Gillespie.c
+ *  cnerve
+ *
+ *  Created by Nikita on 2/15/10.
+ *  Copyright 2010 University of Washington. All rights reserved.
+ *
+ */
+
+#include <math.h>			// for misc. log/exp operations
+#include <stdbool.h>			// for bool defenition
+#include <stdint.h>			// for uint32_t defenition
+#include <stdio.h>			// for FILE defenition
+#include "../cnerve.h"
+#include "../channels.h"
+#include "../mt19937ar.h"		// for random number generator
+
+/**
+	@brief	Gillespie's algorithm for N_Na
+	@see Mino2002, Mino2004 (appendix) for a description of the algorithm
+
+
+	\param[in] N_Na 	# of channels
+	\param[in] V_m		voltage current at the node where the # of open chans is being calculated (mV)
+	\param[in] si		time step increment, "delt" in our jargon
+	\param[in] it		iteration # (time step #)
+	\param[in] node		node number for which we're performing the calculation
+
+	\return n_Na		number of Na channels open ?
+
+
+*/
+#ifdef DEBUG
+double Gillespie_Na(const bool doInit, const uint32_t N_Na, const double V_m, const double si, const uint32_t it, const uint32_t node, const kinParam Kins, FILE *fp) {
+#else
+double Gillespie_Na(const bool doInit, const uint32_t N_Na, const double V_m, const double si, const uint32_t it, const uint32_t node, const kinParam Kins) {
+#endif
+/*		STATIC VARIABLES	*/
+	static double t_occ_Na[MAX_RAN_NODES];
+	static int  m0h0[MAX_RAN_NODES], m1h0[MAX_RAN_NODES], m2h0[MAX_RAN_NODES], m3h0[MAX_RAN_NODES];
+	static int  m0h1[MAX_RAN_NODES], m1h1[MAX_RAN_NODES], m2h1[MAX_RAN_NODES], m3h1[MAX_RAN_NODES];
+
+/* 		OTHERS 				*/
+	
+	int		state = -1;
+	double	gamma_00=0.0,
+			gamma_10=0.0,
+			gamma_20=0.0,
+			gamma_30=0.0,
+			gamma_01=0.0,
+			gamma_11=0.0,
+			gamma_21=0.0,
+			gamma_31=0.0;
+	double	a_m=0.0,
+			b_m=0.0,
+			a_h=0.0,
+			b_h=0.0,
+			d_m_h=0.0;
+	double	lambda=0.0;
+	double	u=0.0,
+			t=0.0,
+			t_life=0.0;
+	double	P[21],
+			eta[21];
+
+/* initialize(0) or generation(1) */
+	if( unlikely( doInit ) ) {
+  /*                */
+  /* initialization */
+  /*                */
+    /* Rate Constants for V_m=0.0 */
+      a_m = rate_Na(ALPHA_M,V_m,Kins);	b_m = rate_Na(BETA_M,V_m,Kins);
+      a_h = rate_Na(ALPHA_H,V_m,Kins);	b_h = rate_Na(BETA_H,V_m,Kins);
+
+    /* Initialize the number of channels in each state */
+      d_m_h=1.0/(a_m+b_m)/(a_m+b_m)/(a_m+b_m)/(a_h+b_h);
+      m3h1[node]=(int)(N_Na*pow(a_m,3.0)*a_h*d_m_h);
+      m2h1[node]=(int)(N_Na*3.0*pow(a_m,2.0)*b_m*a_h*d_m_h);
+      m1h1[node]=(int)(N_Na*3.0*a_m*pow(b_m,2.0)*a_h*d_m_h);
+      m0h1[node]=(int)(N_Na*pow(b_m,3.0)*a_h*d_m_h);
+      m3h0[node]=(int)(N_Na*pow(a_m,3.0)*b_h*d_m_h);
+      m2h0[node]=(int)(N_Na*3.0*pow(a_m,2.0)*b_m*b_h*d_m_h);
+      m1h0[node]=(int)(N_Na*3.0*a_m*pow(b_m,2.0)*b_h*d_m_h);
+      m0h0[node]=(int)(N_Na-(m3h1[node]+m2h1[node]+m1h1[node]+m0h1[node]
+                            +m3h0[node]+m2h0[node]+m1h0[node]));
+
+    /* gamma */
+      gamma_00 = 3.0*a_m+a_h+0.0*b_m; gamma_10 = 2.0*a_m+a_h+1.0*b_m;
+      gamma_20 = 1.0*a_m+a_h+2.0*b_m; gamma_30 = 0.0*a_m+a_h+3.0*b_m;
+      gamma_01 = 3.0*a_m+b_h+0.0*b_m; gamma_11 = 2.0*a_m+b_h+1.0*b_m;
+      gamma_21 = 1.0*a_m+b_h+2.0*b_m; gamma_31 = 0.0*a_m+b_h+3.0*b_m;
+
+    /* lambda */
+      lambda = (double)m0h0[node]*gamma_00 + (double)m1h0[node]*gamma_10 
+             + (double)m2h0[node]*gamma_20 + (double)m3h0[node]*gamma_30
+             + (double)m0h1[node]*gamma_01 + (double)m1h1[node]*gamma_11 
+             + (double)m2h1[node]*gamma_21 + (double)m3h1[node]*gamma_31;
+
+    /* Lifetime */
+    /* ``+si'' is important if it=[1,nd], remove it if it=[0,nd-1] */
+      t_occ_Na[node]=-log(genrand_real2())/lambda;
+
+	} else {
+
+  /*            */
+  /* generation */
+  /*            */
+
+
+    /* determine if t_occ is within [t,t+si) */
+      t=si*(double)it;
+
+      while ( (t<=t_occ_Na[node]) && (t_occ_Na[node]<=(t+si)) ) {
+
+      /* rate for Na channels at V_m */
+        a_m = rate_Na(ALPHA_M,V_m,Kins); b_m = rate_Na(BETA_M,V_m,Kins);
+        a_h = rate_Na(ALPHA_H,V_m,Kins); b_h = rate_Na(BETA_H,V_m,Kins);
+
+      /* gamma */
+        gamma_00 = 3.0*a_m+a_h+0.0*b_m; gamma_10 = 2.0*a_m+a_h+1.0*b_m;
+        gamma_20 = 1.0*a_m+a_h+2.0*b_m; gamma_30 = 0.0*a_m+a_h+3.0*b_m;
+        gamma_01 = 3.0*a_m+b_h+0.0*b_m; gamma_11 = 2.0*a_m+b_h+1.0*b_m;
+        gamma_21 = 1.0*a_m+b_h+2.0*b_m; gamma_31 = 0.0*a_m+b_h+3.0*b_m;
+
+      /* lambda */
+        lambda = (double)m0h0[node]*gamma_00 + (double)m1h0[node]*gamma_10 
+               + (double)m2h0[node]*gamma_20 + (double)m3h0[node]*gamma_30
+               + (double)m0h1[node]*gamma_01 + (double)m1h1[node]*gamma_11 
+               + (double)m2h1[node]*gamma_21 + (double)m3h1[node]*gamma_31;
+
+      /* eta */
+        eta[0]= 0.0;
+        eta[1]= 3.0 * a_m * (double)m0h0[node];  
+        eta[2]= 1.0 * b_m * (double)m1h0[node];
+        eta[3]= 2.0 * a_m * (double)m1h0[node];
+        eta[4]= 2.0 * b_m * (double)m2h0[node];
+        eta[5]= 1.0 * a_m * (double)m2h0[node];
+        eta[6]= 3.0 * b_m * (double)m3h0[node];
+        eta[7]= 1.0 * a_h * (double)m0h0[node];
+        eta[8]= 1.0 * b_h * (double)m0h1[node];
+        eta[9]= 1.0 * a_h * (double)m1h0[node];
+        eta[10]=1.0 * b_h * (double)m1h1[node];
+        eta[11]=1.0 * a_h * (double)m2h0[node];
+        eta[12]=1.0 * b_h * (double)m2h1[node];
+        eta[13]=1.0 * a_h * (double)m3h0[node];
+        eta[14]=1.0 * b_h * (double)m3h1[node];
+        eta[15]=3.0 * a_m * (double)m0h1[node];
+        eta[16]=1.0 * b_m * (double)m1h1[node];
+        eta[17]=2.0 * a_m * (double)m1h1[node];
+        eta[18]=2.0 * b_m * (double)m2h1[node];
+        eta[19]=1.0 * a_m * (double)m2h1[node];
+        eta[20]=3.0 * b_m * (double)m3h1[node];
+
+      /* cummulative state transition prob */
+        double tmp=0.0;
+        for(int i=0;i<=20;i++){
+          tmp+=eta[i];
+          P[i]=tmp;
+        }
+
+      /* determine which one of those states */ 
+        u=genrand_real2()*lambda;
+        for(int i=1;i<=20;i++){
+          if ((P[i-1]<=u)&&(u<P[i])) {
+            state=i;
+     	  }
+        }
+
+      /* update the number of channels */
+        switch(state){
+			case 1:  m0h0[node]--; m1h0[node]++; break; 
+			case 2:  m1h0[node]--; m0h0[node]++; break;
+			case 3:  m1h0[node]--; m2h0[node]++; break;
+			case 4:  m2h0[node]--; m1h0[node]++; break;
+			case 5:  m2h0[node]--; m3h0[node]++; break;
+			case 6:  m3h0[node]--; m2h0[node]++; break;
+			case 7:  m0h0[node]--; m0h1[node]++; break;
+			case 8:  m0h1[node]--; m0h0[node]++; break;
+			case 9:  m1h0[node]--; m1h1[node]++; break;
+			case 10: m1h1[node]--; m1h0[node]++; break;
+			case 11: m2h0[node]--; m2h1[node]++; break;
+			case 12: m2h1[node]--; m2h0[node]++; break;
+			case 13: m3h0[node]--; m3h1[node]++; break;
+			case 14: m3h1[node]--; m3h0[node]++; break;
+			case 15: m0h1[node]--; m1h1[node]++; break;
+			case 16: m1h1[node]--; m0h1[node]++; break;
+			case 17: m1h1[node]--; m2h1[node]++; break;
+			case 18: m2h1[node]--; m1h1[node]++; break;
+			case 19: m2h1[node]--; m3h1[node]++; break;
+			case 20: m3h1[node]--; m2h1[node]++; break;
+			default:
+				// no need to break out here, genrand_real2()*lambda was not high enough
+				// to warrant a state transition, so we just sail on
+				break;
+        }
+
+      /* lifetime & update occurrence time */
+        t_life=-log(genrand_real2())/lambda;
+        t_occ_Na[node]+=t_life;
+
+      }
+    
+	}
+
+	// check if anything's gone awry:
+    assert(m3h1[node] >= 0);
+
+	const int n_Na=m3h1[node];			///< # of channels in open state (m3h1)
+	
+	
+#ifdef DEBUG
+	fwrite(&n_Na,	sizeof(int),	1,	fp);
+
+	/*
+	if( unlikely(verbosity > 11) ) {
+      printf("   m0h0,m1h0,m2h0,m3h0 : %4d %4d %4d %4d\n",
+                 m0h0[node],m1h0[node],m2h0[node],m3h0[node]);
+      printf("   m0h1,m1h1,m2h1,m3h1 : %4d %4d %4d %4d\n",
+                 m0h1[node],m1h1[node],m2h1[node],m3h1[node]);
+	}
+	*/
+#endif
+	
+	return(n_Na);
+}

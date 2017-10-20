@@ -1,0 +1,25 @@
+#!/bin/bash
+#
+#PBS -N NormSupra
+#PBS -l nodes=1:ppn=8,mem=12gb,feature=8core
+#PBS -l walltime=00:147:00
+#PBS -o /gscratch/stf/jresnick/NewData/NormSupra/Output
+#PBS -j oe
+#PBS -d /gscratch/stf/jresnick/NewData/NormSupra/
+#
+cd $PBS_O_INITDIR
+HYAK_SLOTS=`wc -l < $PBS_NODEFILE`
+module load parallel_sql
+runcommand()
+{
+parallel-sql --sql --sql-set NormSupra -a parallel --exit-on-term -j $HYAK_SLOTS
+}
+waituntilkill()
+{
+while true;
+do
+  sleep 1
+done
+}
+trap 'waituntilkill' SIGTERM SIGINT
+runcommand
