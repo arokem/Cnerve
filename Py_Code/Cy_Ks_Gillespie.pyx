@@ -8,12 +8,12 @@ from math import exp, log
 from random import random
 
 def ALPHA_S(V_m,kinParams):
-    return kinParams["a_s_A"] * (V_m - 84 - kinParams["a_s_B"]) / (1 - exp((kinParams["a_s_B"] - V_m) / kinParams["a_s_C"]))
+    return kinParams["a_s_A"] * (V_m - kinParams["a_s_B"]) / (1 - exp((kinParams["a_s_B"] - V_m) / kinParams["a_s_C"]))
 
 def BETA_S(V_m,kinParams):
-    return kinParams["b_s_A"] * (kinParams["b_s_B"] - V_m - 84) / (1 - exp((V_m - kinParams["b_s_B"]) / kinParams["b_s_C"]))
+    return kinParams["b_s_A"] * (kinParams["b_s_B"] - V_m) / (1 - exp((V_m - kinParams["b_s_B"]) / kinParams["b_s_C"]))
 
-def Ks_Gillespie(N_slowK,chan_states,V_m,si,it,kinParams):
+def Cy_Ks_Gillespie(N_slowK,chan_states,V_m,si,it,kinParams):
     "/*		STATIC VARIABLES	*/"
     t_occ_slowK = 0
     state = -1
